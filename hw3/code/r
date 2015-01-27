@@ -1,0 +1,4 @@
+make
+rmmod sys_xjob
+insmod sys_xjob.ko
+lsmod

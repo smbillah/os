@@ -1,0 +1,86 @@
+/*
+ * Copyright (c) 2006-2014 Syed M Billah
+ * Copyright (c) 2006-2014 Stony Brook University
+ * Copyright (c) 2006-2014 The Research Foundation of SUNY
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
+
+#include "xjob.h"
+
+/*
+ *
+ */
+
+static struct task_struct *producer;
+
+int __init init_producer(void)
+{
+	int err;
+    struct producer_args args;
+	producer = kthread_run(&run_producer,(void *)&args, "producer");    
+	if (!IS_ERR(producer))
+		return 0;
+
+	err = PTR_ERR(producer);
+	printk(KERN_ERR "xjob: create_producer failed %d\n", err);
+	producer = NULL;
+	return err;
+}
+
+void stop_producer(void)
+{
+	if (producer){
+        kthread_stop( producer);	     
+    }    
+}
+
+
+//void run_sioq(work_func_t func, struct sioq_args *args)
+int run_producer(void *args)
+{    
+    do_exit(0);
+    
+    //struct producer_args * p_args = (struct producer_args *)args;
+    //init_completion(&p_args->comp);
+    
+    //create two false tasks 1, 2
+    struct sioq_args sioq;
+    //struct sioq_args sioq2;
+    //sioq.completion = &args->comp;
+	sioq.checksum.id = 1;     
+    run_sioq(__xjob_checksum, &sioq);
+    //__xjob_checksum();
+        
+    //task 2    
+	//sioq2.checksum.id = 2; 
+    //run_sioq(__xjob_checksum3, &sioq2);    
+    
+    //if producer queue is full, then go to sleep
+    //wait_for_completion(&p_args->comp);
+    //flush_sioq();
+    
+    do_exit(0);
+
+    //*/
+    /*
+    unsigned long j0,j1;
+    int i, delay;
+    delay = 1*HZ;
+    
+    printk("producer started\n");   
+    for(i =0; i<5; i++){
+        printk("in producer\n");
+        j0 = jiffies; 
+        j1 = j0 + delay; 
+        while (time_before(jiffies, j1))        
+            schedule();        
+    }
+    printk("producer done\n");   
+    do_exit(0);
+    */
+}
+
+

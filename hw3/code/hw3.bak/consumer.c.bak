@@ -1,0 +1,67 @@
+/*
+ * Copyright (c) 2006-2014 Syed M Billah
+ * Copyright (c) 2006-2014 Stony Brook University
+ * Copyright (c) 2006-2014 The Research Foundation of SUNY
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
+
+#include "xjob.h"
+
+/*
+ *
+ */
+
+static struct task_struct *consumer;
+
+int __init init_consumer(void)
+{
+	int err;
+    struct consumer_args args;
+	consumer = kthread_run(&run_consumer,(void *)&args, "consumer");    
+	if (!IS_ERR(consumer))
+		return 0;
+
+	err = PTR_ERR(consumer);
+	printk(KERN_ERR "xjob: create_consumer failed %d\n", err);
+	consumer = NULL;
+	return err;
+}
+
+void stop_consumer(void)
+{
+	if (consumer)
+        kthread_stop( consumer);		
+}
+
+
+int run_consumer(void *args)
+{    
+
+    unsigned long j0,j1;
+    int i, delay;
+    delay = 1*HZ;
+    
+    struct sioq_args sioq;        
+	sioq.checksum.id = 2;     
+    do_exit(0);
+    //__xjob_checksum2();
+    //__xjob_checksum3();
+    run_sioq(__xjob_checksum2, &sioq);
+    /*
+    printk("consumer started \n");
+    for(i =0; i<5; i++){
+        printk("in consumer\n");
+        j0 = jiffies; 
+        j1 = j0 + delay; 
+        while (time_before(jiffies, j1))        
+            schedule();                
+    }
+    printk("consumer done\n");   
+    */
+    do_exit(0);
+
+    //return 0;
+}

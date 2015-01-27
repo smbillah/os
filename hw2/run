@@ -1,0 +1,7 @@
+cd ..
+cd ..
+make
+
+rmmod wrapfs
+cd fs/wrapfs/
+insmod wrapfs.ko

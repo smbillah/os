@@ -1,0 +1,202 @@
+HW2 (u2fs file-system)
+==============================================
+The u2fs file-system lies in between two stackable file-systems, namely wrapfs and unionfs. It is more complex than wrapfs in terms of maintaining two underlying file-systems instead one, but far less complicated than the generic unionfs which can maintain N numbers of underlying file-systems. According to our Professor (Zadok), designing new file-system is very challenging, and it requires careful study of existing files-systems and make maximum use of them. 
+
+
+EXTRA_CREDIT
+=============================================
+I did EXTRA_CREDIT part for this homework. Since EXTRA_CREDIT part requires deep integration to most of the core functions such as lookup, readdir, filldir, etc., I've decided to make EXTRA_CREDIT as default. Therefore, if you just compile and run this u2fs, duplicate name elimination in kernel-space or EXTRA_CREDIT part is automatically enabled to comply with the unix semantics. Details of each of the steps are given in the later part of this report.
+
+
+Design Methodology
+==============================================
+Since the u2fs is sort of an intermediate file-system between wrapfs and unionfs, I started with the papers written by Prof Zadok -- particularly, these three are most helpful to get fine grained idea behind stackable file-systems:
+    0. "A Stackable File System Interface For Linux",
+    1. "Versatility and Unix Semantics in Namespace Unifcation",
+    2. "Unionfs: User- and Community-Oriented Development of a Unification File System"
+    
+I then studied the codebase of wrapfs. After reading those papers, wrapfs was easy to understand and to work with. I simply used two private pointers in wrapfs data sturctures instead of one. But as I completed the initial lookup (commits 1 ,2 in git), I realized it was a wrong way to go. Because there were a lot of code duplication for left and right branches. Later on I focused on unionfs more and more as it is clean and intuitive way of implementing stackable filesystem. But Unionfs is a difficult beast to work with. After a gazillion of hours spent on unionfs, I was finally able to crack. I tried to extract maximum of unionfs, and it is not surprising that my homework looks very much similar to unionfs. 
+
+
+Installation:
+==============================================
+All the source files and headers are located in /usr/src/hw2-sbillah/fs/wrapfs folder. Here is the directory structure of of my project directory (wrapfs).
+Please make sure that you put my Makefile in the wrapfs directory.
+
+  wrapfs+
+        +README
+        +Makefile
+        +Kconfig
+        +main.c
+        +lookup.c
+        +dentry.c
+        +super.c
+        +file.c
+        +inode.c
+        +
+        +union_fs.h
+        +union.h
+        +
+        +rename.c
+        +copyup.c
+        +
+        +commonfops.c
+        +
+        +dirfops.c
+        +dirhelper.c
+        +
+        +mmap.c
+        +rdstate.c
+        +
+        +sioq.c
+        +subr.c
+        +
+        +unlink.c
+        +whiteout.c    
+        +fanout.h
+        +sioq.h
+
+To compile the code (for standalone and EXTRA_CREDIT), please type the following instructions:
+    cd /usr/src/hw2-sbillah
+    make
+    rmmod wrapfs
+    insmod fs/wrapfs/wrapfs.ko
+    lsmod   [on success, there should be a module wrapfs]
+     
+To mount/unmount: 
+    mount -t u2fs -o ldir=/root/files/,rdir=/root/code/ null /mnt/u2fs/
+    umount /mnt/u2fs/
+    
+
+Supported functionalities:
+==============================================
+It supports most of the standard shell commands, i.e.:       
+    mount \\
+    umount \\   
+    cd \\
+    ls (dulicate elimination is done in kernel -- EXTRA_CREDIT) \\
+    copyup : for editing in right branch \\
+    edit/view: cat, echo "hi there" >> a.txt, etc. \\
+    file/dir creation : touch, mkdir, etc. (in both branch, not in right) \\
+    file/dir deletion: unlink, rm , etc \\
+    whiteout \\
+    link creation/deletion (ln, ln -s) \\   
+    stat/df \\
+    cat, less \\
+    VFS operation :chmod, etc., \\
+    rename: mv,etc. \\
+    
+       
+    
+Detailed procedures
+===========================================
+As I mentioned earlier, most of the functions implemented here follow the outline of the papers [1]. Followings are implementation specification of u2fs file-system:
+
+Two Branches, different priority/mode
+-------------------------------------
+Left branch is high priority branch and it also support r/w, whereas the right branch is read-only and low priority.
+
+Whiteouts:
+-------------------------------------
+When we remove a file on the right read-only branch, we create a corresponding whiteout in the left branch.
+Lets consider the following scenario:
+Suppose, we have a two-branch and a file 'foo' on right branch:
+
+left+                  right+
+    +.                      +.
+    +..                     +..
+                            +foo
+      
+The unified view would simply be:
+
+u2fs(/)+
+       +foo
+
+Since 'foo' is stored on a read-only branch, it cannot be removed. A whiteout is used to remove the name 'foo' from the u2fs namespace. Again, since right is read-only, the whiteout cannot be created there. So, we try on a left branch and create the whiteout there.
+
+        u2fs(/)+
+               +.
+               +..
+left+                  right+
+    +.                      +.
+    +..                     +..
+    +.wh.foo                +foo
+
+Later, when u2fs traverses branches (due to lookup or readdir), it eliminate 'foo' from the namespace (as well as the whiteout itself.)
+
+
+Opaque Directories:
+------------------------------------
+Now consider the following scenario:
+
+        u2fs(/)+
+               +.
+               +..
+               +a
+left+                  right+
+    +.                      +.
+    +..                     +..
+                            +a+
+                              +f
+
+
+left branch is empty; right branch 1 has the directory /a and file /a/f.  Now, let's say we try to perform the following operation in the u2fs:
+
+	rm -rf a
+
+Because right branch is not writable, we cannot physically remove the file /a/f or the directory /a.  So instead, we will create a whiteout in left branch
+named /.wh.a, masking out the name "a" from right branch:
+
+        u2fs(/)+
+               +.
+               +..               
+left+                  right+
+    +.                      +.
+    +..                     +..
+    +.wh.a                  +a+
+                              +f
+	
+  Next, let's say we try to create a directory named "a" as follows    
+    
+    $ mkdir a
+
+    Because we have a whiteout for "a" already, u2fs behaves as if "a" doesn't exist. , and thus will delete the whiteout and replace it with an
+actual directory named "a". The problem now is that if we try to "ls" in the union, u2fs will perform is normal directory name unification, for *all* directories named "a" in both branches.  This will cause the file /a/f from right branch to re-appear in the u2fs's namespace, which violates Unix semantics.
+
+        u2fs(/)+
+               +.
+               +..
+               +a+
+                 +f
+               
+left+                  right+
+    +.                      +.
+    +..                     +..
+    +a                      +a+
+                              +f
+        
+To avoid this problem, we have a different form of whiteouts for directories, called "opaque directories". Whenever we replace a whiteout with a directory, that directory is marked as opaque and named as /a/.wh.__dir_opaque in left branch, after having created directory /a there. When u2fs notices that a directory is opaque, it stops all namespace operations (including merging readdir contents) at that opaque directory:
+
+        u2fs(/)+
+               +.
+               +..
+               +a                 
+               
+left+                  right+
+    +.                      +.
+    +..                     +..
+    +a                      +a+
+    +a.wh.__dir_opaque        +f
+
+
+Duplicate Elimination:
+-------------------------
+It is possible for files on different two branches to have the same name. u2fs always take the instance from left branch an and "hide" the others. What it does is the following: 'filldir' is a callback function invoked indirectly by VFS.  But it’s the file-system itself that gives the VFS this ->filldir method to call.  If our 'filldir' returns NULL, the VFS will ignore that file’s name (i.e., never expose it to a u2fs).
+
+
+Copyup:
+------------------------
+
+When a change is made to the contents of a file's data or meta-data in right branch, they have to be stored somewhere.  The best way is to create a copy of the
+original file on the left branch (writable), and then redirect the write though to this copy.  Since left branch has higher priority, the lookup and readdir return this newer "version" of the file rather than the original. We use the asynchronous super IO queue SIOQ (similar to unionfs) to perform potentially expensive operations such as a copyup. 
+

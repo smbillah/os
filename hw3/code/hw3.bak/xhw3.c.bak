@@ -1,0 +1,42 @@
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <sys/stat.h>
+
+#define __NR_xjob	349	/* our private syscall number */
+#define DEBUG_MODE 0
+
+void print_usage(void)
+{
+	fprintf(stderr, "./xhw1 [flags] outfile infile1 infile2 ...\n");
+	fprintf(stderr,	"\t where flags is\n");
+	fprintf(stderr,	"-a: append mode (O_APPEND)\n");
+	fprintf(stderr, "-c: create mode (O_CREATE)\n");
+	fprintf(stderr, "-t: truncate mode (O_TRUNC)\n");
+	fprintf(stderr, "-e: excl mode (O_EXCL)\n");
+	fprintf(stderr, "-A: atomic concat mode (extra credit only)\n");
+	fprintf(stderr, "-N: return num-files instead of num-bytes written\n");
+	fprintf(stderr, "-P: return percentage of data written out\n");
+	fprintf(stderr, "-m ARG: set default mode to ARG\n");
+	fprintf(stderr, "-h: print short usage string\n");
+}
+
+
+/* main function*/
+int main(int argc, char *argv[])
+{
+	int rc;
+	rc = syscall(__NR_xjob, NULL, 1);
+	
+	if(rc < 0)
+	{
+		printf("ERROR\n");
+	}
+	else
+	{
+		printf("%d\n", rc);
+	}
+	
+	exit(rc);
+}

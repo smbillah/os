@@ -1,0 +1,57 @@
+Syntax:
+-----------------------------------------------------------------------------
+./xhw1 [flags] output-file input-file1 input-file2 ...
+
+flags are as follows:
+* -a: append mode (O_APPEND)
+ * -c: O_CREATE
+ * -t: O_TRUNC
+ * -e: O_EXCL
+ * -A: Atomic concat mode (extra credit only)
+ * -N: return num-files instead of num-bytes written
+ * -P: return percentage of data written out
+ * -m ARG: set default mode to ARG (e.g., octal 755, see chmod(2) and umask(1))
+ * -h: print short usage string
+
+
+
+Resources:
+--------------------------------------------------------------------------------
+I mainly relied on class lecture and class forum.
+However, there are some other sources that I frequenty visited. For example:
+1. http://lxr.free-electrons.com/
+2. http://stackoverflow.com/
+3. http://linux.die.net/
+4. https://github.com/torvalds/linux
+
+
+Issues:
+--------------------------------------------------------------------------------
+1. works fine for all input combinaiton except ATOMIC mode.
+2.1 there was a bug in the earlier version which is fixed now. 
+2.2 ** bug fixed: kernel get hang if the input files are bigger than PAGE_SIZE
+    reason: memory allocation-deallocaiton problem (no longer exists now!).
+    
+3. most of getopt(...) behaviours are borrowed from open(2) and 'cat' command.
+4. can handle maximum 20 input files at a time (defined in MAX_INPUT_FILES in 
+   the header file)
+
+
+Design:
+---------------------------------------------------------------------------------
+I followed top-down approach in my design. 
+
+1. User land:
+a. input are verified as mentioned in the hw description
+b. for flag -c, the mode -m is make optional following open(2) nature.
+c. mod ARG is checked extensively.
+d. null arguments are treated correctly with error message.
+
+2. Kernel land:
+a. read the user argument.
+b. validate each file by try to open it 
+c. here i keep all the input file pointers in memory since i limit the maximum 
+   input size to MAX_INPUT_FILE (or 20).
+d. keeping the input file pointers in memory has other benefit: it lowers unncessary
+   file open/close overhead.
+e. most of the errno are reported correctly.	
