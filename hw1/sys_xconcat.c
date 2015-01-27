@@ -164,6 +164,11 @@ asmlinkage long xconcat(void *arg, int argslen)
     
     //7. input files validate
     infiles = kmalloc(sizeof(struct file *)*globalArgs->infile_count, GFP_KERNEL);
+    if (!infiles) {
+        err = -ENOMEM; 
+        goto out;
+    }
+    
     for(curr_open_file=0; curr_open_file < globalArgs->infile_count; curr_open_file++){
         infiles[curr_open_file] = filp_open(globalArgs->infiles[curr_open_file], O_RDONLY, 0);
         if (IS_ERR(infiles[curr_open_file])) {
